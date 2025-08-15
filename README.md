@@ -38,10 +38,3 @@ Open http://localhost:8080 in a browser to use the UI.
 H2 Console (optional): http://localhost:8080/h2
 
 JDBC URL: jdbc:h2:mem:iagdb
-
-Project Structure
-model/       # Entity classes
-dao/         # Data Access Objects (DB operations)
-service/     # Business logic
-web/         # HTTP handlers & JSON utils
-resources/   # Static HTML & seed SQL
