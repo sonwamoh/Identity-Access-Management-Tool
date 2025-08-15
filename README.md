@@ -1,5 +1,5 @@
 <img width="1085" height="803" alt="Screenshot 2025-08-14 215207" src="https://github.com/user-attachments/assets/3fe8959b-050b-40e5-b4d7-68a6108f2bbb" />
-IAG Mini (Java + H2 + HTML/JS)
+## IAG Mini
 
 A lightweight identity & access request tracker built with plain Java (no Spring Boot), H2 embedded database, and a simple HTML/CSS/JS UI.
 
