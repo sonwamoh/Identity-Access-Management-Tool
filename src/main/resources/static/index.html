@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>Mini IAG Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <style>
+        :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+        body { margin: 24px; max-width: 980px; }
+        h1 { margin: 0 0 8px; }
+        .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
+        label { display:block; font-weight:600; margin-top: 8px; }
+        input, textarea, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 8px; }
+        button { padding: 8px 12px; border: 1px solid #222; background: #222; color: #fff; border-radius: 8px; cursor: pointer; }
+        button.ghost { background: #fff; color: #222; }
+        table { width:100%; border-collapse: collapse; }
+        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+        .badge { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border:1px solid #ccc; }
+        .danger { color:#b00020; border-color:#b00020; }
+        .ok { color:#0a7; border-color:#0a7; }
+        .muted { color:#666; }
+        .row { display:flex; gap:12px; }
+        .row > * { flex:1; }
+    </style>
+</head>
+<body>
+<h1>Mini Identity & Access Management</h1>
+<p class="muted">Submit an access request → Approver acts → Approval auto-provisions.</p>
+
+<div class="card">
+    <h2>New Access Request</h2>
+    <div class="row">
+        <div>
+            <label>Username</label>
+            <input id="username" placeholder="e.g., msonwane"/>
+        </div>
+        <div>
+            <label>System</label>
+            <input id="systemName" placeholder="e.g., S4HANA"/>
+        </div>
+        <div>
+            <label>Requested Role</label>
+            <input id="requestedRole" placeholder="e.g., ADMIN"/>
+        </div>
+    </div>
+    <label>Reason</label>
+    <textarea id="reason" rows="3" placeholder="Why do you need this access?"></textarea>
+    <div style="margin-top:12px;">
+        <button onclick="submitRequest()">Submit Request</button>
+        <button class="ghost" onclick="loadRequests()">Refresh</button>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Requests</h2>
+    <div class="row" style="margin-bottom:8px;">
+        <div>
+            <label>Status filter</label>
+            <select id="statusFilter" onchange="loadRequests()">
+                <option value="">All</option>
+                <option value="PENDING">PENDING</option>
+                <option value="PROVISIONED">PROVISIONED</option>
+                <option value="REJECTED">REJECTED</option>
+            </select>
+        </div>
+        <div>
+            <label>User filter</label>
+            <input id="userFilter" placeholder="username" oninput="loadRequests()"/>
+        </div>
+    </div>
+
+    <table id="reqTable">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>System</th>
+            <th>Role</th>
+            <th>Risk</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+    async function submitRequest() {
+      const payload = {
+        username: document.getElementById('username').value.trim(),
+        systemName: document.getElementById('systemName').value.trim(),
+        requestedRole: document.getElementById('requestedRole').value.trim(),
+        reason: document.getElementById('reason').value.trim()
+      };
+      const res = await fetch('/api/requests', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) { alert('Failed to submit'); return; }
+      clearForm();
+      loadRequests();
+    }
+
+    function clearForm() {
+      ['username','systemName','requestedRole','reason'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    async function loadRequests() {
+      const status = document.getElementById('statusFilter').value;
+      const user = document.getElementById('userFilter').value.trim();
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (user) params.set('user', user);
+      const res = await fetch('/api/requests' + (params.toString() ? ('?' + params.toString()) : ''));
+      const data = await res.json();
+      renderTable(data);
+    }
+
+    function badge(text, cls='') {
+      return `<span class="badge ${cls}">${text}</span>`;
+    }
+
+    function renderTable(rows) {
+      const tbody = document.querySelector('#reqTable tbody');
+      tbody.innerHTML = '';
+      rows.forEach(r => {
+        const risk = r.highRisk ? badge(r.riskLevel || 'HIGH', 'danger') :
+                     badge(r.riskLevel || 'LOW', 'ok');
+        const actions = actionButtons(r);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.id}</td>
+          <td>${r.username}</td>
+          <td>${r.systemName}</td>
+          <td>${r.requestedRole}</td>
+          <td>${risk}</td>
+          <td>${badge(r.status)}</td>
+          <td>${actions}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function actionButtons(r) {
+      if (r.status === 'PENDING') {
+        return `
+          <button onclick="approve(${r.id})">Approve</button>
+          <button class="ghost" onclick="rejectReq(${r.id})">Reject</button>
+        `;
+      }
+      return `<span class="muted">—</span>`;
+    }
+
+    async function approve(id) {
+      const note = prompt('Any note? (optional)') || null;
+      await fetch(`/api/requests/${id}/approve`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ note })
+      });
+      loadRequests();
+    }
+
+    async function rejectReq(id) {
+      const reason = prompt('Reason for rejection?') || '';
+      await fetch(`/api/requests/${id}/reject`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ reason })
+      });
+      loadRequests();
+    }
+
+    loadRequests();
+</script>
+</body>
+</html>
